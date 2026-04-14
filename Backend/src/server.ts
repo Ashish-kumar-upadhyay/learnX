@@ -26,7 +26,6 @@ async function connectDatabaseWithRetry() {
 }
 
 async function main() {
-  await connectDatabaseWithRetry();
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: { origin: env.corsOrigin === '*' ? '*' : env.corsOrigin.split(','), credentials: true },
@@ -43,11 +42,14 @@ async function main() {
   const port = Number(process.env.PORT) || env.port;
   console.log(`Starting server on port ${port} (PORT env: ${process.env.PORT})`);
   logger.info(`Starting server on port ${port} (PORT env: ${process.env.PORT})`);
-  server.listen(port, '0.0.0.0', () => {
+  // Avoid localhost (::1) mismatch on systems where localhost resolves to IPv6 first.
+  server.listen(port, () => {
     console.log(`Server running on port ${port}`);
     logger.info(`LearnX API listening on port ${port}`);
     logger.info(`Server successfully started and listening!`);
   });
+  // Keep API reachable while DB reconnect attempts continue.
+  void connectDatabaseWithRetry();
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
       logger.error(

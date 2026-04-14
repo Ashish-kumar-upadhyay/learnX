@@ -93,7 +93,7 @@ export default function RoleLogin() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Demo login failed";
       if (msg.toLowerCase().includes("failed to fetch")) {
-        toast.error("Backend server unreachable. Ensure backend runs on http://localhost:5000");
+        toast.error(`Backend server unreachable. Ensure backend runs on ${API_BASE}`);
       } else {
         toast.error(msg);
       }

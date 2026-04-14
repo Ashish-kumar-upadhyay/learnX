@@ -8,6 +8,7 @@ import passport from 'passport';
 import { env } from './config/environment';
 import { errorMiddleware } from './middleware/error.middleware';
 import { ensureUploadRoot } from './services/file.service';
+import { requireDatabaseReady } from './middleware/db-ready.middleware';
 
 import authRoutes from './routes/auth.routes';
 import googleRoutes from './routes/google.routes';
@@ -65,6 +66,7 @@ app.use(limiter);
 
 app.get('/', (_req, res) => res.send('API is running!'));
 app.get('/health', (_req, res) => res.json({ ok: true }));
+app.use('/api', requireDatabaseReady);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/google', googleRoutes);

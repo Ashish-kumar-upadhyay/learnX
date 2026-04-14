@@ -1,20 +1,5 @@
 {
   "version": 2,
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/"
-    },
-    {
-      "src": "/health",
-      "dest": "/"
-    }
-  ],
-  "functions": {
-    "package.json": {
-      "runtime": "@vercel/node@3.0.0"
-    }
-  },
   "env": {
     "NODE_ENV": "production"
   }

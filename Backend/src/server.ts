@@ -41,8 +41,10 @@ async function main() {
   });
 
   const port = Number(process.env.PORT) || env.port;
+  logger.info(`Starting server on port ${port} (PORT env: ${process.env.PORT})`);
   server.listen(port, '0.0.0.0', () => {
     logger.info(`LearnX API listening on port ${port}`);
+    logger.info(`Server successfully started and listening!`);
   });
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

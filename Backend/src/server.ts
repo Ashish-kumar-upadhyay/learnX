@@ -40,13 +40,14 @@ async function main() {
     socket.on('disconnect', () => undefined);
   });
 
-  server.listen(env.port, () => {
-    logger.info(`LearnX API listening on port ${env.port}`);
+  const port = Number(process.env.PORT) || env.port;
+  server.listen(port, '0.0.0.0', () => {
+    logger.info(`LearnX API listening on port ${port}`);
   });
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
       logger.error(
-        `Port ${env.port} is already in use. Close the other LearnX / Node process using this port, or set PORT in .env to a free port. On Windows: Get-NetTCPConnection -LocalPort ${env.port} then Stop-Process -Id <OwningProcess> -Force`
+        `Port ${port} is already in use. Close the other LearnX / Node process using this port, or set PORT in .env to a free port. On Windows: Get-NetTCPConnection -LocalPort ${port} then Stop-Process -Id <OwningProcess> -Force`
       );
     } else {
       logger.error(String(err));

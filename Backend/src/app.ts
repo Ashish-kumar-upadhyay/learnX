@@ -1,0 +1,91 @@
+import 'express-async-errors';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import session from 'express-session';
+import passport from 'passport';
+import { env } from './config/environment';
+import { errorMiddleware } from './middleware/error.middleware';
+import { ensureUploadRoot } from './services/file.service';
+
+import authRoutes from './routes/auth.routes';
+import googleRoutes from './routes/google.routes';
+import userRoutes from './routes/user.routes';
+import classRoutes from './routes/class.routes';
+import assignmentRoutes from './routes/assignment.routes';
+import examRoutes from './routes/exam.routes';
+import attendanceRoutes from './routes/attendance.routes';
+import teacherAttendanceRoutes from './routes/teacher-attendance.routes';
+import feeRoutes from './routes/fee.routes';
+import salaryRoutes from './routes/salary.routes';
+import notificationRoutes from './routes/notification.routes';
+import announcementRoutes from './routes/announcement.routes';
+import leaveRoutes from './routes/leave.routes';
+import aiRoutes from './routes/ai.routes';
+import fileRoutes from './routes/file.routes';
+import timetableRoutes from './routes/timetable.routes';
+import lectureRoutes from './routes/lecture.routes';
+import sprintPlanRoutes from './routes/sprint-plan.routes';
+import supportTicketsRoutes from './routes/support-tickets.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import { setupGoogleStrategy } from './auth/google.strategy';
+
+void ensureUploadRoot();
+setupGoogleStrategy();
+
+const app = express();
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.nodeEnv === 'production' ? 300 : 2000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(
+  helmet({
+    // Frontend (8080) loads avatar/selfie images from backend (5000).
+    // Default CORP `same-origin` blocks such resources in browser.
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+app.use(cors({ origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','), credentials: true }));
+app.use(
+  session({
+    secret: env.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, sameSite: 'lax' },
+  })
+);
+app.use(passport.initialize());
+app.use(express.json({ limit: '12mb' }));
+app.use(limiter);
+
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+app.use('/api/auth', authRoutes);
+app.use('/api/auth/google', googleRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/classes', classRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/exams', examRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/teacher-attendance', teacherAttendanceRoutes);
+app.use('/api/fee', feeRoutes);
+app.use('/api/salary', salaryRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/leave-requests', leaveRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/files', fileRoutes);
+app.use('/api/timetable', timetableRoutes);
+app.use('/api/lectures', lectureRoutes);
+app.use('/api', sprintPlanRoutes);
+app.use('/api/support-tickets', supportTicketsRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+app.use(errorMiddleware);
+
+export default app;

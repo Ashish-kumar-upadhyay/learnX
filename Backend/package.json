@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "postbuild": "echo \"Build completed successfully\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -23,7 +24,7 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.8.3",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^1.4.5-lts.2",
     "nodemailer": "^6.9.16",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

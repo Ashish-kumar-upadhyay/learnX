@@ -1,5 +1,5 @@
 import 'express-async-errors';
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -57,7 +57,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, sameSite: 'lax' },
-  })
+  }) as any
 );
 app.use(passport.initialize());
 app.use(express.json({ limit: '12mb' }));

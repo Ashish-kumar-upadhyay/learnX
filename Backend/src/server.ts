@@ -41,8 +41,10 @@ async function main() {
   });
 
   const port = Number(process.env.PORT) || env.port;
+  console.log(`Starting server on port ${port} (PORT env: ${process.env.PORT})`);
   logger.info(`Starting server on port ${port} (PORT env: ${process.env.PORT})`);
   server.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on port ${port}`);
     logger.info(`LearnX API listening on port ${port}`);
     logger.info(`Server successfully started and listening!`);
   });

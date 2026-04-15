@@ -36,6 +36,30 @@ void ensureUploadRoot();
 setupGoogleStrategy();
 
 const app = express();
+const configuredOrigins = env.corsOrigin
+  .split(',')
+  .map((v) => v.trim())
+  .filter(Boolean);
+
+const corsOrigin: cors.CorsOptions['origin'] = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (env.corsOrigin === '*') return callback(null, true);
+  if (configuredOrigins.includes(origin)) return callback(null, true);
+
+  // Allow local frontend on any localhost/127.0.0.1 port (Vite can switch ports).
+  try {
+    const parsed = new URL(origin);
+    if (
+      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') &&
+      Number.isFinite(Number(parsed.port || '80'))
+    ) {
+      return callback(null, true);
+    }
+  } catch {
+    // Invalid Origin header; reject below.
+  }
+  return callback(new Error(`CORS blocked for origin: ${origin}`));
+};
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -51,7 +75,7 @@ app.use(
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
-app.use(cors({ origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','), credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(
   session({
     secret: env.sessionSecret,

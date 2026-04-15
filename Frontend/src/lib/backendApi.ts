@@ -1,7 +1,11 @@
 export const ACCESS_TOKEN_KEY = "learnx_accessToken";
 export const REFRESH_TOKEN_KEY = "learnx_refreshToken";
 
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const DEFAULT_API_BASE = import.meta.env.DEV
+  ? "http://localhost:5000"
+  : "https://backend-ashish11.vercel.app";
+
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE;
 
 export function setTokens(tokens: { accessToken: string; refreshToken: string }) {
   localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);

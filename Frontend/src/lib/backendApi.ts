@@ -1,11 +1,12 @@
 export const ACCESS_TOKEN_KEY = "learnx_accessToken";
 export const REFRESH_TOKEN_KEY = "learnx_refreshToken";
 
-const DEFAULT_API_BASE = import.meta.env.DEV
-  ? "http://localhost:5000"
-  : "https://backend-ashish11.vercel.app";
-
-export const API_BASE = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE;
+const raw = import.meta.env.VITE_API_BASE_URL?.trim();
+if (!raw) {
+  throw new Error("VITE_API_BASE_URL is missing. Set it in Frontend/.env.");
+}
+/** Backend origin only — no hardcoded hosts; configure via env. */
+export const API_BASE = raw.replace(/\/$/, "");
 
 export function setTokens(tokens: { accessToken: string; refreshToken: string }) {
   localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);

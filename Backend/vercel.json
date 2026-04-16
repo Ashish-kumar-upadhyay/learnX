@@ -1,9 +1,6 @@
 {
   "version": 2,
   "functions": {
-    "api/[...path].ts": {
-      "runtime": "@vercel/node"
-    },
     "api/index.ts": {
       "runtime": "@vercel/node"
     }
@@ -12,17 +9,8 @@
     "NODE_ENV": "production"
   },
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/[...path]"
-    },
-    {
-      "source": "/health",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/",
-      "destination": "/api/index"
-    }
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" },
+    { "source": "/", "destination": "/api/index" }
   ]
 }

@@ -1,6 +1,28 @@
 {
   "version": 2,
+  "functions": {
+    "api/[...path].ts": {
+      "runtime": "@vercel/node"
+    },
+    "api/index.ts": {
+      "runtime": "@vercel/node"
+    }
+  },
   "env": {
     "NODE_ENV": "production"
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/[...path]"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/",
+      "destination": "/api/index"
+    }
+  ]
 }

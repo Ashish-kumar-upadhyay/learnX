@@ -1,20 +1,6 @@
 {
   "version": 2,
-  "functions": {
-    "api/index.ts": {
-      "runtime": "@vercel/node"
-    },
-    "api/proxy.ts": {
-      "runtime": "@vercel/node"
-    }
-  },
   "env": {
     "NODE_ENV": "production"
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/proxy?path=$1" },
-    { "source": "/api", "destination": "/api/proxy" },
-    { "source": "/health", "destination": "/api/index" },
-    { "source": "/", "destination": "/api/index" }
-  ]
+  }
 }

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, X } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, Loader2, Trash2, X, Calendar } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { api, getAccessToken } from "@/lib/backendApi";
+import { useNavigate } from "react-router-dom";
 
 interface SprintPlan {
   id: string;
@@ -23,6 +24,20 @@ interface SprintTask {
   module: string;
   is_done: boolean;
   sort_order: number;
+  link?: string;
+}
+
+interface Assignment {
+  id: string;
+  title: string;
+  description: string | null;
+  reference_link?: string | null;
+  start_date?: string;
+  due_date: string;
+  max_score: number | null;
+  status: string;
+  batch: string | null;
+  duration_hours: number | null;
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -50,20 +65,23 @@ const CATEGORY_COLORS: Record<string, string> = {
 const CATEGORIES = ["All", "Lecture", "Assignment", "Quiz", "General"];
 
 export default function SprintPlan() {
-  const { roles, user } = useAuth();
+  const { roles, user, profile } = useAuth();
   const isAdmin = roles.includes("admin");
+  const navigate = useNavigate();
 
   const [plans, setPlans] = useState<SprintPlan[]>([]);
   const [tasks, setTasks] = useState<SprintTask[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", week_start: "", week_end: "", batch: "" });
   const [saving, setSaving] = useState(false);
   const [addingTask, setAddingTask] = useState<{ day: number; time: string } | null>(null);
-  const [newTask, setNewTask] = useState({ title: "", module: "General" });
+  const [newTask, setNewTask] = useState({ title: "", module: "General", link: "" });
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [addingTaskLoading, setAddingTaskLoading] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ taskId: string; taskTitle: string } | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -71,13 +89,24 @@ export default function SprintPlan() {
     const accessToken = getAccessToken();
     if (!accessToken) return;
 
-    const [plansRes, tasksRes] = await Promise.all([
+    const batch = profile?.class_name || profile?.batch || "";
+    const [plansRes, tasksRes, assignRes] = await Promise.all([
       api<SprintPlan[]>("/api/sprint-plans", { method: "GET", accessToken }),
       api<SprintTask[]>("/api/sprint-plan-tasks", { method: "GET", accessToken }),
+      api<Assignment[]>(
+        `/api/assignments?status=published${batch ? `&batch=${encodeURIComponent(batch)}` : ""}`,
+        { method: "GET", accessToken }
+      ),
     ]);
 
     if (plansRes.status === 200 && plansRes.data) setPlans(plansRes.data);
     if (tasksRes.status === 200 && tasksRes.data) setTasks(tasksRes.data);
+    if (assignRes.status === 200 && assignRes.data) {
+      console.log("Assignments fetched from API:", assignRes.data);
+      setAssignments(assignRes.data);
+    } else {
+      console.log("Assignments fetch failed:", assignRes);
+    }
     setLoading(false);
   };
 
@@ -90,10 +119,90 @@ export default function SprintPlan() {
     return all.filter(t => t.module === categoryFilter);
   }, [currentPlan, tasks, categoryFilter]);
 
+  // Merge assignments into the grid if they fall within the current plan's week
+  const mergedTasks = useMemo(() => {
+    console.log("Current sprint plan:", currentPlan);
+    console.log("All assignments:", assignments);
+    
+    if (!currentPlan || !currentPlan.week_start || !currentPlan.week_end) {
+      console.log("No current plan or dates, returning planTasks only");
+      return planTasks;
+    }
+
+    const planStart = new Date(currentPlan.week_start);
+    const planEnd = new Date(currentPlan.week_end);
+    console.log("Sprint plan date range:", planStart.toLocaleDateString(), "to", planEnd.toLocaleDateString());
+    
+    // Temporarily show all assignments for debugging
+    const relevantAssignments = assignments.filter(assign => {
+      const dueDate = new Date(assign.due_date);
+      const startDate = assign.start_date ? new Date(assign.start_date) : dueDate;
+
+      console.log(`Assignment "${assign.title}":`);
+      console.log("  - Due date:", assign.due_date, "=>", dueDate.toLocaleDateString());
+      console.log("  - Start date:", assign.start_date || "Not set", "=>", startDate.toLocaleDateString());
+      console.log("  - Status:", assign.status);
+      console.log("  - Batch:", assign.batch);
+      
+      // Temporarily return true for all assignments to see if they appear
+      return true;
+    });
+    console.log("Relevant assignments (showing all for debugging):", relevantAssignments);
+
+    // Convert assignments to task-like objects and place them in appropriate time slots for each day
+    const assignmentTasks: SprintTask[] = [];
+    relevantAssignments.forEach(assign => {
+      const dueDate = new Date(assign.due_date);
+      const startDate = assign.start_date ? new Date(assign.start_date) : dueDate; // If no start_date, use due_date
+      
+      // Create tasks for each day from start_date to due_date
+      const currentDate = new Date(startDate);
+      while (currentDate <= dueDate) {
+        const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to 0-4 (Mon-Fri)
+        
+        // Only show on weekdays (Mon-Fri)
+        if (adjustedDay >= 0 && adjustedDay <= 4) {
+          // Use 9:00 AM as default time for multi-day assignments
+          const timeIndex = TIME_SLOTS.indexOf("9:00");
+          
+          // Generate a unique ID for each day's task
+          const assignmentId = `assign-${assign.id}-${adjustedDay}`;
+          
+          assignmentTasks.push({
+            id: assignmentId,
+            sprint_plan_id: currentPlan.id,
+            title: assign.title,
+            module: "Assignment",
+            is_done: false,
+            sort_order: adjustedDay * 100 + (timeIndex >= 0 ? timeIndex : 0),
+            link: `/assignments#${assign.id}`, // Link to assignments page with hash
+            isAssignment: true, // Flag to identify assignments
+            originalId: assign.id, // Store original assignment ID
+            assignmentDay: adjustedDay, // Store which day this represents
+          } as SprintTask & { isAssignment: boolean; originalId: string; assignmentDay: number });
+        }
+        
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    // Combine manual tasks and assignments
+    const combined = [...planTasks, ...assignmentTasks];
+    
+    // Filter by category if needed
+    if (categoryFilter === "All") {
+      return combined;
+    }
+    const filtered = combined.filter(t => t.module === categoryFilter);
+    return filtered;
+  }, [currentPlan, planTasks, assignments, categoryFilter]);
+
   // Map tasks to grid: sort_order encodes day*100 + timeIndex
   const taskGrid = useMemo(() => {
     const grid: Record<string, SprintTask[]> = {};
-    planTasks.forEach(t => {
+    mergedTasks.forEach(t => {
       const day = Math.floor(t.sort_order / 100);
       const timeIdx = t.sort_order % 100;
       const key = `${day}-${timeIdx}`;
@@ -101,7 +210,7 @@ export default function SprintPlan() {
       grid[key].push(t);
     });
     return grid;
-  }, [planTasks]);
+  }, [mergedTasks]);
 
   const savePlan = async () => {
     if (!form.title || !form.week_start || !form.week_end) {
@@ -162,6 +271,7 @@ export default function SprintPlan() {
           title: newTask.title,
           module: newTask.module || "General",
           sort_order: sortOrder,
+          link: newTask.link || null,
         }),
       });
       if (res.status !== 201 && res.status !== 200) {
@@ -169,7 +279,7 @@ export default function SprintPlan() {
         return;
       }
       toast.success("Task added!");
-      setNewTask({ title: "", module: "" });
+      setNewTask({ title: "", module: "General", link: "" });
       setAddingTask(null);
       fetchData();
     } finally {
@@ -190,10 +300,27 @@ export default function SprintPlan() {
     fetchData();
   };
 
-  const deleteTask = async (taskId: string) => {
+  const deleteTask = async (taskId: string, taskTitle: string) => {
+    console.log("Delete button clicked - Task ID:", taskId, "Task Title:", taskTitle);
+    setDeleteConfirm({ taskId, taskTitle });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    const { taskId } = deleteConfirm;
+    console.log("Attempting to delete task:", taskId);
     const accessToken = getAccessToken();
-    if (!accessToken) return;
-    await api(`/api/sprint-plan-tasks/${taskId}`, { method: "DELETE", accessToken });
+    if (!accessToken) { toast.error("Login required"); setDeleteConfirm(null); return; }
+    const res = await api(`/api/sprint-plan-tasks/${taskId}`, { method: "DELETE", accessToken });
+    console.log("Delete API response:", res);
+    if (res.status !== 200) {
+      console.log("Delete failed with status:", res.status);
+      toast.error("Failed to delete task");
+      setDeleteConfirm(null);
+      return;
+    }
+    toast.success("Activity deleted!");
+    setDeleteConfirm(null);
     fetchData();
   };
 
@@ -348,9 +475,9 @@ export default function SprintPlan() {
                           key={dayIdx}
                           className="border border-border/40 px-1 py-1 align-top min-h-[48px] relative group"
                           onClick={() => {
-                            if (isAdmin && cellTasks.length === 0) {
+                            if (isAdmin) {
                               setAddingTask({ day: dayIdx, time });
-                              setNewTask({ title: "", module: "" });
+                              setNewTask({ title: "", module: "General", link: "" });
                             }
                           }}
                           style={{ cursor: isAdmin && cellTasks.length === 0 ? "pointer" : "default" }}
@@ -358,19 +485,37 @@ export default function SprintPlan() {
                           {cellTasks.map(task => (
                             <div
                               key={task.id}
-                              className={`rounded-lg px-2.5 py-2 text-xs font-medium mb-1 relative border ${
+                              className={`rounded-lg px-2.5 py-2 text-xs font-medium mb-1 relative border transition-all hover:shadow-sm ${
                                 task.is_done
                                   ? "bg-success/20 text-success line-through border-success/30"
                                   : CATEGORY_COLORS[task.module] || CATEGORY_COLORS["General"]
                               }`}
-                              onClick={e => { e.stopPropagation(); if (isAdmin) toggleTask(task.id, task.is_done); }}
-                              style={{ cursor: isAdmin ? "pointer" : "default" }}
+                              onClick={e => { 
+                                e.stopPropagation(); 
+                                const taskWithFlags = task as SprintTask & { isAssignment?: boolean; originalId?: string };
+                                if (taskWithFlags.isAssignment) {
+                                  // Navigate to assignments page
+                                  navigate('/assignments');
+                                } else if (task.link) {
+                                  // Open external link
+                                  window.open(task.link, '_blank');
+                                } else if (isAdmin) {
+                                  // Toggle completion for manual tasks
+                                  toggleTask(task.id, task.is_done);
+                                }
+                              }}
+                              style={{ cursor: "pointer" }}
                             >
-                              <div className="font-semibold">{task.title}</div>
+                              <div className="flex items-start gap-1">
+                                <div className="font-semibold truncate flex-1">{task.title}</div>
+                                {(task as SprintTask & { isAssignment?: boolean }).isAssignment && (
+                                  <Calendar className="w-3 h-3 text-amber-600 flex-shrink-0 mt-0.5" />
+                                )}
+                              </div>
                               <div className="opacity-75 text-[10px]">{task.module}</div>
-                              {isAdmin && (
+                              {isAdmin && !(task as SprintTask & { isAssignment?: boolean }).isAssignment && (
                                 <button
-                                  onClick={e => { e.stopPropagation(); deleteTask(task.id); }}
+                                  onClick={e => { e.stopPropagation(); deleteTask(task.id, task.title); }}
                                   className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-destructive/20 text-destructive transition-opacity"
                                 >
                                   <X className="w-3 h-3" />
@@ -378,7 +523,7 @@ export default function SprintPlan() {
                               )}
                             </div>
                           ))}
-                          {isAdmin && cellTasks.length === 0 && (
+                          {isAdmin && (
                             <div className="opacity-0 group-hover:opacity-40 text-center text-xs text-muted-foreground py-2 transition-opacity">+</div>
                           )}
                         </td>
@@ -413,7 +558,7 @@ export default function SprintPlan() {
                 <input className={inputClass} value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))} placeholder="e.g. Math Class" autoFocus onKeyDown={e => e.key === "Enter" && addTask()} />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase mb-1 block">Category</label>
+                <label className="text-xs text-muted-foreground uppercase mb-1 block">Type</label>
                 <select className={inputClass} value={newTask.module} onChange={e => setNewTask(p => ({ ...p, module: e.target.value }))}>
                   <option value="General">General</option>
                   <option value="Lecture">Lecture</option>
@@ -421,11 +566,67 @@ export default function SprintPlan() {
                   <option value="Quiz">Quiz</option>
                 </select>
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase mb-1 block">Link (optional)</label>
+                <input 
+                  className={inputClass} 
+                  value={newTask.link} 
+                  onChange={e => setNewTask(p => ({ ...p, link: e.target.value }))} 
+                  placeholder="Video/Assignment/Quiz link" 
+                />
+              </div>
               <div className="flex gap-2">
                 <button onClick={addTask} disabled={addingTaskLoading} className="px-5 py-2 rounded-lg text-sm font-medium text-primary-foreground disabled:opacity-50" style={{ background: "var(--gradient-primary, linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent))))" }}>
                   {addingTaskLoading ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Please wait...</> : "Add"}
                 </button>
                 <button onClick={() => setAddingTask(null)} className="px-4 py-2 rounded-lg text-sm bg-muted/50 text-muted-foreground hover:bg-muted transition-colors">Cancel</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="glass-card p-6 w-full max-w-md space-y-4 border border-destructive/20"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-destructive" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">Delete Activity</h3>
+                  <p className="text-sm text-muted-foreground">Are you sure you want to delete this activity?</p>
+                </div>
+              </div>
+              
+              <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+                <div className="font-semibold text-foreground">{deleteConfirm.taskTitle}</div>
+                <div className="text-xs text-muted-foreground mt-1">This action cannot be undone.</div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-destructive-foreground bg-destructive hover:bg-destructive/90 transition-colors"
+                >
+                  Delete Activity
+                </button>
+                <button 
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
               </div>
             </motion.div>
           </motion.div>

@@ -14,12 +14,17 @@ export async function listUsers(req: AuthRequest, res: Response) {
 
 export async function createUser(req: AuthRequest, res: Response) {
   try {
-    const { user, welcomeToken } = await authService.createUserByAdmin(req.body);
+    const out = await authService.createUserByAdmin(req.body);
+    const { user, welcomeToken } = out;
+    const studentId = 'studentId' in out ? out.studentId : undefined;
+    const teacherCode = 'teacherCode' in out ? out.teacherCode : undefined;
     return created(res, {
       id: String(user._id),
       email: user.email,
       full_name: user.name,
       welcomeToken,
+      studentId,
+      teacherCode,
     });
   } catch (e) {
     return fail(res, 400, e instanceof Error ? e.message : 'Error');

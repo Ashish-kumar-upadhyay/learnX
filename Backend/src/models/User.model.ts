@@ -9,6 +9,8 @@ export interface IUser extends Document {
   assignedClass?: string | null;
   avatar_url?: string | null;
   is_approved?: boolean;
+  studentId?: string | null;
+  teacherCode?: string | null;
 
   // Token invalidation (optional for existing data)
   token_version?: number;
@@ -31,6 +33,28 @@ const UserSchema = new Schema<IUser>(
     assignedClass: { type: String, default: null },
     avatar_url: { type: String, default: null },
     is_approved: { type: Boolean, default: true },
+    studentId: {
+      type: String,
+      default: null,
+      sparse: true,
+      unique: true,
+      index: true,
+      validate: {
+        validator: function (this: IUser, value: string | null | undefined): boolean {
+          if (this.role !== 'student') return true;
+          return typeof value === 'string' && value.length > 0;
+        },
+        message: 'Student ID is required for student role',
+      },
+    },
+
+    teacherCode: {
+      type: String,
+      default: null,
+      sparse: true,
+      unique: true,
+      index: true,
+    },
 
     token_version: { type: Number, default: 0 },
 
@@ -44,7 +68,7 @@ const UserSchema = new Schema<IUser>(
 );
 
 UserSchema.pre('save', function (next) {
-  this.updatedAt = new Date();
+  this.set('updatedAt', new Date());
   next();
 });
 

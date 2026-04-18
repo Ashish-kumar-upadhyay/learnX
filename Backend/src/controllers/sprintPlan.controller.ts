@@ -51,6 +51,7 @@ export async function createSprintPlanTask(req: AuthRequest, res: Response) {
     module: body.module ?? 'General',
     is_done: body.is_done ?? false,
     sort_order: body.sort_order,
+    link: body.link ?? null,
     id: body.id,
   });
   return created(res, mapId(doc.toObject()));
@@ -60,7 +61,7 @@ export async function toggleSprintPlanTask(req: AuthRequest, res: Response) {
   if (!req.authUser) return fail(res, 401, 'Unauthorized');
   const { id } = req.params;
   const { is_done } = req.body as { is_done: boolean };
-  const doc = await SprintPlanTask.findOneAndUpdate({ id }, { $set: { is_done } }, { new: true }).lean();
+  const doc = await SprintPlanTask.findOneAndUpdate({ _id: id }, { $set: { is_done } }, { new: true }).lean();
   if (!doc) return fail(res, 404, 'Not found');
   return ok(res, mapId(doc));
 }
@@ -68,7 +69,7 @@ export async function toggleSprintPlanTask(req: AuthRequest, res: Response) {
 export async function deleteSprintPlanTask(req: AuthRequest, res: Response) {
   if (!req.authUser) return fail(res, 401, 'Unauthorized');
   const { id } = req.params;
-  await SprintPlanTask.deleteOne({ id });
+  await SprintPlanTask.deleteOne({ _id: id });
   return ok(res, null, 'Deleted');
 }
 

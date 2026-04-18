@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { api, getAccessToken } from "@/lib/backendApi";
+import { api, getAccessToken, getApiErrorMessage } from "@/lib/backendApi";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +30,8 @@ interface UserWithRole {
   full_name: string | null;
   avatar_url: string | null;
   class_name: string | null;
+  student_id?: string | null;
+  teacher_code?: string | null;
   created_at: string;
   roles: AppRole[];
 }
@@ -72,6 +74,12 @@ export default function AdminDashboard() {
   const [editForm, setEditForm] = useState({ full_name: "", class_name: "" });
   const [deleteConfirm, setDeleteConfirm] = useState<{ userId: string; userName: string } | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
+  const [addedTeacherCreds, setAddedTeacherCreds] = useState<{
+    teacherCode: string;
+    password: string;
+    name: string;
+    email: string;
+  } | null>(null);
 
   const [salaryConfigs, setSalaryConfigs] = useState<any[]>([]);
   const [salaryLoading, setSalaryLoading] = useState(false);
@@ -108,6 +116,8 @@ export default function AdminDashboard() {
       full_name: (u.name ?? u.full_name ?? null) as string | null,
       avatar_url: (u.avatar_url ?? null) as string | null,
       class_name: (u.assignedClass ?? u.class_name ?? null) as string | null,
+      student_id: (u.studentId ?? u.student_id ?? null) as string | null,
+      teacher_code: (u.teacherCode ?? u.teacher_code ?? null) as string | null,
       created_at: String(u.createdAt ?? u.created_at ?? new Date().toISOString()),
       roles: [u.role as AppRole],
     }));
@@ -168,15 +178,20 @@ export default function AdminDashboard() {
       }),
     });
     if (res.status !== 201) {
-      const msg =
-        typeof res.error === "string"
-          ? res.error
-          : Array.isArray(res.error)
-            ? res.error[0]
-            : "Failed to add teacher";
-      toast.error(msg);
+      toast.error(getApiErrorMessage(res.error, "Failed to add teacher"));
     } else {
-      toast.success("Teacher added successfully! ✅");
+      const newCode = (res.data as { teacherCode?: string } | undefined)?.teacherCode;
+      if (newCode) {
+        toast.success(`Teacher added! Code: ${newCode}`);
+        setAddedTeacherCreds({
+          teacherCode: newCode,
+          password: teacherForm.password,
+          name: teacherForm.full_name,
+          email: teacherForm.email,
+        });
+      } else {
+        toast.success("Teacher added successfully! ✅");
+      }
       try {
         const welcomeToken = (res.data as { welcomeToken?: string } | undefined)?.welcomeToken;
         if (!welcomeToken) {
@@ -210,12 +225,16 @@ export default function AdminDashboard() {
   };
 
   const addStudent = async () => {
-    if (!studentForm.email || !studentForm.password || !studentForm.full_name) {
-      toast.error("Email, password and name are required");
+    if (!studentForm.password || !studentForm.full_name) {
+      toast.error("Password and name are required");
       return;
     }
-    if (studentForm.password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    if (!studentForm.email.trim()) {
+      toast.error("Student email is required so we can send the welcome message.");
+      return;
+    }
+    if (studentForm.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
     if (!studentForm.class_name) {
@@ -225,38 +244,39 @@ export default function AdminDashboard() {
     setAddingStudent(true);
     const accessToken = getAccessToken();
     if (!accessToken) { toast.error("Login required"); setAddingStudent(false); return; }
+    const body: Record<string, unknown> = {
+      email: studentForm.email.trim(),
+      password: studentForm.password,
+      full_name: studentForm.full_name,
+      role: "student",
+      batch: studentForm.class_name,
+    };
     const res = await api("/api/users", {
       method: "POST",
       accessToken,
-      body: JSON.stringify({
-        email: studentForm.email,
-        password: studentForm.password,
-        full_name: studentForm.full_name,
-        role: "student",
-        batch: studentForm.class_name, // backend maps batch -> assignedClass
-      }),
+      body: JSON.stringify(body),
     });
     if (res.status !== 201) {
-      const msg =
-        typeof res.error === "string"
-          ? res.error
-          : Array.isArray(res.error)
-            ? res.error[0]
-            : "Failed to add student";
-      toast.error(msg);
+      toast.error(getApiErrorMessage(res.error, "Failed to add student"));
     }
     else {
-      toast.success("Student added successfully! ✅");
+      const newStudentId = (res.data as { studentId?: string } | undefined)?.studentId;
+      toast.success(
+        newStudentId
+          ? `Student added! Student ID: ${newStudentId} (share with student for login)`
+          : "Student added successfully! ✅"
+      );
       try {
         const welcomeToken = (res.data as { welcomeToken?: string } | undefined)?.welcomeToken;
+        const toEmail = studentForm.email.trim();
         if (!welcomeToken) {
           toast.error("Welcome email was not sent: sign-in link could not be generated.");
         } else {
         const { sendWelcomeEmail } = await import("@/lib/emailService");
         const emailResult = await sendWelcomeEmail({
-          to_email: studentForm.email,
+          to_email: toEmail,
           to_name: studentForm.full_name,
-          user_email: studentForm.email,
+          user_email: toEmail,
           role: "Student",
           welcomeToken,
         });
@@ -434,6 +454,60 @@ export default function AdminDashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {addedTeacherCreds && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl"
+          >
+            <div className="text-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-7 h-7 text-green-500" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground">Teacher added</h3>
+              <p className="text-sm text-muted-foreground mt-1">Share these with <strong>{addedTeacherCreds.name}</strong></p>
+            </div>
+            <div className="bg-muted/50 rounded-xl p-4 space-y-3 border border-border/50 text-left">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Teacher code (sign-in)</p>
+                <p className="text-sm font-mono font-semibold text-foreground mt-0.5 select-all">{addedTeacherCreds.teacherCode}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Password</p>
+                <p className="text-sm font-mono font-semibold text-foreground mt-0.5 select-all">{addedTeacherCreds.password}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Email (welcome / contact)</p>
+                <p className="text-sm font-mono text-foreground mt-0.5 select-all break-all">{addedTeacherCreds.email}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3 text-center">Teacher signs in at the teacher login page with Teacher code + password (not email).</p>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(
+                    `Teacher code: ${addedTeacherCreds.teacherCode}\nPassword: ${addedTeacherCreds.password}\nEmail: ${addedTeacherCreds.email}`
+                  );
+                  toast.success("Copied to clipboard");
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90"
+              >
+                Copy details
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddedTeacherCreds(null)}
+                className="flex-1 py-2.5 rounded-xl bg-muted text-foreground text-sm font-semibold hover:bg-muted/80"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <div className="w-56 flex-shrink-0 hidden md:block">
         <div className="glass-card p-3 space-y-1 sticky top-4">
@@ -504,6 +578,9 @@ export default function AdminDashboard() {
         {showTeacherForm && activeTab === "all_teachers" && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="glass-card p-5 space-y-4">
             <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Add New Teacher</h3>
+            <p className="text-xs text-muted-foreground">
+              A unique <strong className="text-foreground">Teacher code</strong> (e.g. TCH2026…) is generated automatically. The teacher uses that code and password on the teacher login page. Email is still saved for welcome messages and contact.
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
                 <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Full Name *</label>
@@ -547,12 +624,12 @@ export default function AdminDashboard() {
                 <input className={inputClass} value={studentForm.full_name} onChange={e => setStudentForm(p => ({ ...p, full_name: e.target.value }))} placeholder="e.g. John Doe" />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Email *</label>
-                <input className={inputClass} type="email" value={studentForm.email} onChange={e => setStudentForm(p => ({ ...p, email: e.target.value }))} placeholder="e.g. student@example.com" />
+                <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Student email *</label>
+                <input className={inputClass} type="email" value={studentForm.email} onChange={e => setStudentForm(p => ({ ...p, email: e.target.value }))} placeholder="For welcome email (must be new on LearnX)" required />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Password *</label>
-                <input className={inputClass} type="password" minLength={8} value={studentForm.password} onChange={e => setStudentForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 8 characters" />
+                <input className={inputClass} type="password" minLength={6} value={studentForm.password} onChange={e => setStudentForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 characters" />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">Class *</label>
@@ -621,11 +698,12 @@ export default function AdminDashboard() {
             ) : (
               <div className="glass-card overflow-hidden">
                 <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                  <table className="w-full min-w-[600px] md:min-w-full">
+                  <table className="w-full min-w-[720px] md:min-w-full">
                     <thead>
                       <tr className="border-b border-border/50">
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">Name</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">Class</th>
+                        <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">Teacher code</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">Students</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">Joined</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">Actions</th>
@@ -664,6 +742,7 @@ export default function AdminDashboard() {
                                 </span>
                               )}
                             </td>
+                            <td className="px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm font-mono text-foreground whitespace-nowrap">{t.teacher_code || "—"}</td>
                             <td className="px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm text-foreground font-medium whitespace-nowrap">{classStudents.length}</td>
                             <td className="px-3 md:px-5 py-2 md:py-3 text-xs md:text-sm text-muted-foreground whitespace-nowrap">{new Date(t.created_at).toLocaleDateString()}</td>
                             <td className="px-3 md:px-5 py-2 md:py-3 whitespace-nowrap">
@@ -729,6 +808,7 @@ export default function AdminDashboard() {
                     <thead>
                       <tr className="border-b border-border/50">
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-5 py-3">Name</th>
+                        <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-5 py-3">Student ID</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-5 py-3">Class</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-5 py-3">Batch</th>
                         <th className="text-left text-xs text-muted-foreground uppercase tracking-wider px-5 py-3">Joined</th>
@@ -737,7 +817,14 @@ export default function AdminDashboard() {
                     </thead>
                     <tbody>
                       {students
-                        .filter(s => !search || s.full_name?.toLowerCase().includes(search.toLowerCase()))
+                        .filter(s => {
+                          const q = search.toLowerCase();
+                          if (!q) return true;
+                          return Boolean(
+                            s.full_name?.toLowerCase().includes(q) ||
+                            (s.student_id && s.student_id.toLowerCase().includes(q))
+                          );
+                        })
                         .map(s => {
                           const isEditing = editingUser === s.user_id;
                           return (
@@ -754,6 +841,7 @@ export default function AdminDashboard() {
                                   </div>
                                 )}
                               </td>
+                              <td className="px-5 py-3 text-sm font-mono text-foreground">{s.student_id || "—"}</td>
                               <td className="px-5 py-3">
                                 {isEditing ? (
                                   <select className={cn(inputClass, "max-w-[120px]")} value={editForm.class_name} onChange={e => setEditForm(p => ({ ...p, class_name: e.target.value }))}>

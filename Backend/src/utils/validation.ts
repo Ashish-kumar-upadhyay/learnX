@@ -3,7 +3,13 @@ import Joi from 'joi';
 const objectId = Joi.string().hex().length(24);
 
 export const registerSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: Joi.string()
+    .email()
+    .when('role', {
+      is: 'student',
+      then: Joi.optional().allow('', null),
+      otherwise: Joi.required(),
+    }),
   password: Joi.string().min(6).required(),
   full_name: Joi.string().min(1).required(),
   role: Joi.string().valid('student', 'teacher', 'admin').required(),
@@ -13,9 +19,11 @@ export const registerSchema = Joi.object({
 });
 
 export const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: Joi.string().email().optional(),
+  studentId: Joi.string().pattern(/^STU\d{4}\d{6}$/).optional(),
+  teacherCode: Joi.string().pattern(/^TCH\d{4}\d{6}$/).optional(),
   password: Joi.string().required(),
-});
+}).or('email', 'studentId', 'teacherCode');
 
 export const welcomeLoginSchema = Joi.object({
   token: Joi.string().min(32).required(),
@@ -31,11 +39,23 @@ export const updateProfileSchema = Joi.object({
 
 export const createUserAdminSchema = Joi.object({
   email: Joi.string().email().required(),
-  password: Joi.string().min(8).required(),
+  password: Joi.when('role', {
+    is: 'student',
+    then: Joi.string().min(6).required(),
+    otherwise: Joi.string().min(8).required(),
+  }),
   full_name: Joi.string().required(),
   role: Joi.string().valid('student', 'teacher', 'admin').required(),
   batch: Joi.string().allow('', null),
   is_approved: Joi.boolean(),
+});
+
+export const createStudentSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required(),
+  name: Joi.string().required(),
+  assignedClass: Joi.string().allow('', null),
+  is_approved: Joi.boolean().default(true),
 });
 
 export const roleAssignSchema = Joi.object({

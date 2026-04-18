@@ -26,6 +26,19 @@ export function getRefreshToken() {
   return localStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+/** Readable message from `api()` error payload (string, or `{ message, errors }`). */
+export function getApiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object") {
+    const e = error as { message?: unknown; errors?: unknown };
+    if (Array.isArray(e.errors) && e.errors.length > 0) {
+      return e.errors.map((x) => String(x)).join("; ");
+    }
+    if (typeof e.message === "string" && e.message.trim()) return e.message;
+  }
+  return fallback;
+}
+
 export async function api<T>(
   path: string,
   options: RequestInit & { accessToken?: string; _retryAfterRefresh?: boolean } = {}

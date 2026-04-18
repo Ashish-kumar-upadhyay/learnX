@@ -2,6 +2,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { env } from '../config/environment';
 import { User } from '../models/User.model';
+import { generateUniqueStudentId } from '../services/studentId.service';
 import { hashPassword } from '../utils/hash';
 
 // Sets up Google OAuth strategy for passport.
@@ -40,12 +41,14 @@ export function setupGoogleStrategy() {
           // Password is not used for Google login, but schema requires it.
           const randomPassword = Math.random().toString(36).slice(2);
           const password = await hashPassword(randomPassword);
+          const studentId = await generateUniqueStudentId();
           const user = await User.create({
             email: email.toLowerCase(),
             password,
             name,
             role: 'student',
             assignedClass: null,
+            studentId,
           });
 
           return done(null, { email, name, userId: String(user._id) });

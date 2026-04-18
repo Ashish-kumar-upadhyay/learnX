@@ -16,6 +16,8 @@ interface AuthContextType {
     batch: string | null;
     class_name: string | null;
     is_approved?: boolean;
+    student_id?: string | null;
+    teacher_code?: string | null;
   } | null;
   roles: AppRole[];
   loading: boolean;

@@ -7,6 +7,7 @@ export interface ISprintPlanTask extends Document {
   module: string;
   is_done: boolean;
   sort_order: number;
+  link?: string;
 }
 
 const SprintPlanTaskSchema = new Schema<ISprintPlanTask>(
@@ -17,6 +18,7 @@ const SprintPlanTaskSchema = new Schema<ISprintPlanTask>(
     module: { type: String, required: true, default: 'General' },
     is_done: { type: Boolean, default: false },
     sort_order: { type: Number, required: true, index: true },
+    link: { type: String },
   },
   { collection: 'sprint_plan_tasks' }
 );

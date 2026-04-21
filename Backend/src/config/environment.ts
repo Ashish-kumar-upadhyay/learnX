@@ -33,4 +33,10 @@ export const env = {
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.SMTP_FROM ?? 'noreply@learnx.local',
   },
+  /** Resend API (server-side only). Welcome + contact form emails. */
+  resendApiKey: process.env.RESEND_API_KEY?.trim() ?? '',
+  /** Must be a verified sender in Resend (e.g. LearnX <onboarding@resend.dev> for testing). */
+  resendFrom: process.env.RESEND_FROM?.trim() || 'LearnX <onboarding@resend.dev>',
+  /** Inbox that receives Contact page submissions (defaults to SMTP_FROM if set). */
+  contactNotifyEmail: process.env.CONTACT_NOTIFY_EMAIL?.trim() || process.env.SMTP_FROM?.trim() || '',
 };

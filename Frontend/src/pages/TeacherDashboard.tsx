@@ -8,7 +8,7 @@ import {
   CalendarPlus, FileText, Users, Megaphone, Plus, Clock,
   MapPin, BookOpen, Trash2, Edit, Send, AlertTriangle, Info, ClipboardCheck,
   ExternalLink, Link2, Star, ChevronDown, ChevronUp, Inbox, Bell, CheckCircle2, XCircle, UserCheck, UserX, School,
-  Fingerprint, CalendarOff, Save, Video, Youtube, Play, X
+  Fingerprint, CalendarOff, Save, Video, Youtube, Play, X, Loader2
 } from "lucide-react";
 import AttendanceMarker from "@/components/AttendanceMarker";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 type ClassRow = {
   id: string;
@@ -159,6 +160,8 @@ export default function TeacherDashboard() {
   // Edit student states
   const [editingStudent, setEditingStudent] = useState<string | null>(null);
   const [editStudentForm, setEditStudentForm] = useState({ full_name: "" });
+  const [studentDeleteTarget, setStudentDeleteTarget] = useState<{ userId: string; name: string } | null>(null);
+  const [deletingStudent, setDeletingStudent] = useState(false);
 
   // Student form - auto-set class_name from teacher's assigned class
   const [studentForm, setStudentForm] = useState({
@@ -763,31 +766,14 @@ export default function TeacherDashboard() {
         toast.success("Student added successfully! ✅");
       }
 
-      // Send welcome email via EmailJS
-      try {
-        const welcomeToken = res.data?.welcomeToken as string | undefined;
-        if (!welcomeToken) {
-          toast.error("Welcome email was not sent: sign-in link could not be generated.");
-        } else {
-        const { sendWelcomeEmail } = await import("@/lib/emailService");
-        const emailResult = await sendWelcomeEmail({
-          to_email: contact,
-          to_name: studentForm.full_name,
-          user_email: contact,
-          role: "Student",
-          welcomeToken,
+      const welcomeEmailSent = res.data?.welcomeEmailSent as boolean | undefined;
+      if (welcomeEmailSent) {
+        toast.success("Welcome email sent to the student.");
+      } else {
+        toast.error("Welcome email could not be sent", {
+          description:
+            "Check backend logs. Ensure RESEND_API_KEY / RESEND_FROM or SMTP (SMTP_HOST, SMTP_USER, SMTP_FROM) is set. The student account was still created.",
         });
-        
-        if (emailResult.ok) {
-          toast.success("Welcome email sent to the student.");
-        } else {
-          toast.error(`Welcome email could not be sent: ${emailResult.error || "please check EmailJS settings."}`);
-          console.warn("Email sending failed:", emailResult.error);
-        }
-        }
-      } catch (emailError) {
-        console.error("Email service error:", emailError);
-        toast.error("Welcome email could not be sent due to a service error. The student account was still created.");
       }
 
       if (!newStudentId) {
@@ -811,25 +797,37 @@ export default function TeacherDashboard() {
     }
   }
 
-  async function deleteStudent(studentId: string, studentName: string) {
-    if (!confirm(`Are you sure you want to delete student "${studentName}"? This action cannot be undone.`)) {
-      return;
-    }
-
+  async function confirmDeleteStudent() {
+    if (!studentDeleteTarget) return;
+    setDeletingStudent(true);
     try {
       const token = getAccessToken();
-      if (!token) { toast.error("Login required"); return; }
-      const res = await api(`/api/users/${studentId}`, { method: "DELETE", accessToken: token });
+      if (!token) {
+        toast.error("Login required", { description: "Please sign in again." });
+        setStudentDeleteTarget(null);
+        return;
+      }
+      const res = await api(`/api/users/${studentDeleteTarget.userId}`, { method: "DELETE", accessToken: token });
       if (res.status !== 200) {
-        toast.error("Failed to delete student");
+        toast.error("Couldn't remove student", {
+          description: getApiErrorMessage(res.error, "Check permissions or try again."),
+        });
         return;
       }
 
-      toast.success(`Student "${studentName}" deleted successfully! 🗑️`);
-      fetchAll(); // Refresh the data
+      toast.success("Student removed", {
+        description: `${studentDeleteTarget.name} was permanently deleted from your class.`,
+        duration: 5000,
+      });
+      setStudentDeleteTarget(null);
+      void fetchAll();
     } catch (error) {
       console.error("Delete student error:", error);
-      toast.error("Failed to delete student. Please try again.");
+      toast.error("Something went wrong", {
+        description: getApiErrorMessage(error, "Please try again."),
+      });
+    } finally {
+      setDeletingStudent(false);
     }
   }
 
@@ -1408,7 +1406,16 @@ export default function TeacherDashboard() {
                             ) : (
                               <>
                                 <button onClick={() => { setEditingStudent(s.user_id); setEditStudentForm({ full_name: s.full_name || "" }); }} className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors" title="Edit"><Edit className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => deleteStudent(s.user_id, s.full_name || "Unknown")} className="p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setStudentDeleteTarget({ userId: s.user_id, name: s.full_name || "Student" })
+                                  }
+                                  className="p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                                  title="Delete student"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </>
                             )}
                           </div>
@@ -1941,6 +1948,52 @@ export default function TeacherDashboard() {
           )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog
+        open={studentDeleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingStudent) setStudentDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-[440px] border-2 border-destructive/25 bg-gradient-to-b from-background via-background to-destructive/[0.04] shadow-2xl shadow-destructive/10 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
+          <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-destructive/20 to-destructive/5 ring-2 ring-destructive/20">
+            <Trash2 className="h-7 w-7 text-destructive" aria-hidden />
+          </div>
+          <AlertDialogHeader className="text-center sm:text-center">
+            <AlertDialogTitle className="text-xl font-bold tracking-tight">Remove this student?</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-muted-foreground">
+              <span className="font-semibold text-foreground">{studentDeleteTarget?.name}</span> will lose access to
+              LearnX and their data for this class. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center gap-2 pt-2">
+            <AlertDialogCancel disabled={deletingStudent} className="rounded-xl border-2 sm:min-w-[120px]">
+              Cancel
+            </AlertDialogCancel>
+            <button
+              type="button"
+              disabled={deletingStudent}
+              onClick={() => void confirmDeleteStudent()}
+              className={cn(
+                buttonVariants({ variant: "destructive" }),
+                "rounded-xl gap-2 sm:min-w-[160px] bg-gradient-to-r from-destructive to-rose-600 hover:from-destructive/90 hover:to-rose-600/90 shadow-lg shadow-destructive/25"
+              )}
+            >
+              {deletingStudent ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Removing…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" />
+                  Remove student
+                </>
+              )}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -192,30 +192,14 @@ export default function AdminDashboard() {
       } else {
         toast.success("Teacher added successfully! ✅");
       }
-      try {
-        const welcomeToken = (res.data as { welcomeToken?: string } | undefined)?.welcomeToken;
-        if (!welcomeToken) {
-          toast.error("Welcome email was not sent: sign-in link could not be generated.");
-        } else {
-        const { sendWelcomeEmail } = await import("@/lib/emailService");
-        const emailResult = await sendWelcomeEmail({
-          to_email: teacherForm.email,
-          to_name: teacherForm.full_name,
-          user_email: teacherForm.email,
-          role: "Teacher",
-          welcomeToken,
+      const welcomeEmailSent = (res.data as { welcomeEmailSent?: boolean } | undefined)?.welcomeEmailSent;
+      if (welcomeEmailSent) {
+        toast.success("Welcome email sent to the teacher.");
+      } else {
+        toast.error("Welcome email could not be sent", {
+          description:
+            "Check RESEND_* or SMTP in backend .env and server logs. The teacher account was still created.",
         });
-        
-        if (emailResult.ok) {
-          toast.success("Welcome email sent to the teacher.");
-        } else {
-          toast.error(`Welcome email could not be sent: ${emailResult.error || "please check EmailJS settings."}`);
-          console.warn("Email sending failed:", emailResult.error);
-        }
-        }
-      } catch (emailError) {
-        console.error("Email service error:", emailError);
-        toast.error("Welcome email could not be sent due to a service error. The teacher account was still created.");
       }
       setShowTeacherForm(false);
       setTeacherForm({ email: "", password: "", full_name: "", subject: "", batch: "", class_name: "" });
@@ -266,26 +250,14 @@ export default function AdminDashboard() {
           ? `Student added! Student ID: ${newStudentId} (share with student for login)`
           : "Student added successfully! ✅"
       );
-      try {
-        const welcomeToken = (res.data as { welcomeToken?: string } | undefined)?.welcomeToken;
-        const toEmail = studentForm.email.trim();
-        if (!welcomeToken) {
-          toast.error("Welcome email was not sent: sign-in link could not be generated.");
-        } else {
-        const { sendWelcomeEmail } = await import("@/lib/emailService");
-        const emailResult = await sendWelcomeEmail({
-          to_email: toEmail,
-          to_name: studentForm.full_name,
-          user_email: toEmail,
-          role: "Student",
-          welcomeToken,
+      const welcomeEmailSent = (res.data as { welcomeEmailSent?: boolean } | undefined)?.welcomeEmailSent;
+      if (welcomeEmailSent) {
+        toast.success("Welcome email sent to the student.");
+      } else {
+        toast.error("Welcome email could not be sent", {
+          description:
+            "Check RESEND_* or SMTP in backend .env and server logs. The student account was still created.",
         });
-        if (emailResult.ok) toast.success("Welcome email sent to the student.");
-        else toast.error(`Welcome email could not be sent: ${emailResult.error || "please check EmailJS settings."}`);
-        }
-      } catch (emailError) {
-        console.error("Student email service error:", emailError);
-        toast.error("Welcome email could not be sent due to a service error. The student account was still created.");
       }
       setShowStudentForm(false);
       setStudentForm({ email: "", password: "", full_name: "", class_name: "" });

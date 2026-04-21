@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  GraduationCap, Mail, Phone, MapPin, Send, Sparkles, ArrowRight, 
-  MessageCircle, Zap, Star, CheckCircle, AlertCircle, Loader2, MessageSquare 
+  GraduationCap, Mail, Phone, MapPin, Send, Sparkles,
+  MessageCircle, Zap, Star, CheckCircle, Loader2, MessageSquare 
 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { toast } from "sonner";
+import { API_BASE, getApiErrorMessage } from "@/lib/backendApi";
 
 export default function Contact() {
   const [formData, setFormData] = useState({
@@ -51,29 +52,36 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Create mailto link with form data
-    const subject = encodeURIComponent(`Contact Form Message from ${formData.name}`);
-    const body = encodeURIComponent(
-      `Name: ${formData.name}\nEmail: ${formData.email}\n\nMessage:\n${formData.message}`
-    );
-    const mailtoLink = `mailto:ashishkumarupadhyay0328@gmail.com?subject=${subject}&body=${body}`;
-    
-    // Open email client
-    window.open(mailtoLink);
-    
-    // Simulate processing for UI feedback
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setIsSubmitting(false);
-    setIsSubmitted(true);
-    toast.success("Email client opened! Your message has been prepared.");
-    
-    // Reset form after 3 seconds
-    setTimeout(() => {
-      setFormData({ name: "", email: "", message: "" });
-      setIsSubmitted(false);
-    }, 3000);
+    try {
+      const res = await fetch(`${API_BASE}/api/contact`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.name.trim(),
+          email: formData.email.trim(),
+          message: formData.message.trim(),
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg =
+          typeof json?.message === "string"
+            ? json.message
+            : getApiErrorMessage(json, "Could not send message");
+        toast.error(msg);
+        return;
+      }
+      setIsSubmitted(true);
+      toast.success("Message sent! We'll get back to you soon.");
+      setTimeout(() => {
+        setFormData({ name: "", email: "", message: "" });
+        setIsSubmitted(false);
+      }, 3000);
+    } catch {
+      toast.error("Network error. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

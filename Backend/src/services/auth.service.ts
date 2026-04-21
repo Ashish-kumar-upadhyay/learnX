@@ -6,6 +6,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/
 import { AppRole } from '../types/auth.types';
 import { generateUniqueStudentId } from './studentId.service';
 import { generateUniqueTeacherCode } from './teacherCode.service';
+import { sendWelcomeEmailViaResend } from './mail.service';
 
 const WELCOME_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -233,7 +234,12 @@ export async function createUserByAdmin(data: {
       assignedClass: data.batch ?? null,
       is_approved: data.is_approved ?? true,
     });
-    return { user: out.user, welcomeToken: out.welcomeToken, studentId: out.studentId };
+    return {
+      user: out.user,
+      welcomeToken: out.welcomeToken,
+      studentId: out.studentId,
+      welcomeEmailSent: out.welcomeEmailSent,
+    };
   }
 
   if (data.role === 'teacher') {
@@ -257,7 +263,14 @@ export async function createUserByAdmin(data: {
       welcome_login_token: token,
       welcome_login_expires,
     });
-    return { user, welcomeToken: token, teacherCode };
+    const welcomeEmailSent = await sendWelcomeEmailViaResend({
+      to: user.email,
+      name: user.name,
+      role: 'teacher',
+      welcomeToken: token,
+      teacherCode,
+    });
+    return { user, welcomeToken: token, teacherCode, welcomeEmailSent };
   }
 
   if (!data.email?.trim()) {
@@ -277,7 +290,13 @@ export async function createUserByAdmin(data: {
     welcome_login_token: token,
     welcome_login_expires,
   });
-  return { user, welcomeToken: token };
+  const welcomeEmailSent = await sendWelcomeEmailViaResend({
+    to: user.email,
+    name: user.name,
+    role: data.role,
+    welcomeToken: token,
+  });
+  return { user, welcomeToken: token, welcomeEmailSent };
 }
 
 export async function listUsers(filter: { batch?: string } = {}) {
@@ -320,8 +339,16 @@ export async function createStudent(data: {
     welcome_login_token: token,
     welcome_login_expires,
   });
-  
-  return { user, studentId, welcomeToken: token };
+
+  const welcomeEmailSent = await sendWelcomeEmailViaResend({
+    to: user.email,
+    name: user.name,
+    role: 'student',
+    welcomeToken: token,
+    studentId,
+  });
+
+  return { user, studentId, welcomeToken: token, welcomeEmailSent };
 }
 
 export async function deleteUserCascade(userId: string) {

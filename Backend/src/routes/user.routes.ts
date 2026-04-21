@@ -13,7 +13,7 @@ r.post('/', requireRoles('admin'), validateBody(createUserAdminSchema), user.cre
 r.get('/batch/:batch', user.usersByBatch);
 r.get('/:id', user.getUserById);
 r.put('/:id', user.updateUser);
-r.delete('/:id', requireRoles('admin'), user.deleteUser);
+r.delete('/:id', requireRoles('admin', 'teacher'), user.deleteUser);
 r.post('/:id/assign-role', requireRoles('admin'), validateBody(roleAssignSchema), user.assignRole);
 r.delete('/:id/remove-role', requireRoles('admin'), validateBody(roleAssignSchema), user.removeRoleFromUser);
 

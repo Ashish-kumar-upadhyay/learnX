@@ -30,6 +30,7 @@ import lectureRoutes from './routes/lecture.routes';
 import sprintPlanRoutes from './routes/sprint-plan.routes';
 import supportTicketsRoutes from './routes/support-tickets.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import contactRoutes from './routes/contact.routes';
 import { setupGoogleStrategy } from './auth/google.strategy';
 
 void ensureUploadRoot();
@@ -90,6 +91,8 @@ app.use(limiter);
 
 app.get('/', (_req, res) => res.send('API is running!'));
 app.get('/health', (_req, res) => res.json({ ok: true }));
+/** Contact form works without DB (Resend only). */
+app.use('/api/contact', contactRoutes);
 app.use('/api', requireDatabaseReady);
 
 app.use('/api/auth', authRoutes);

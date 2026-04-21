@@ -80,6 +80,7 @@ export async function createStudent(req: AuthRequest, res: Response) {
         id: String(plain._id),
         studentId: out.studentId,
         welcomeToken: out.welcomeToken,
+        welcomeEmailSent: out.welcomeEmailSent,
         full_name: typeof plain.name === 'string' ? plain.name : u.name,
         email: typeof plain.email === 'string' ? plain.email : u.email,
       },

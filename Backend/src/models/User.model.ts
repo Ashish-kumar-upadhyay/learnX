@@ -48,12 +48,10 @@ const UserSchema = new Schema<IUser>(
       },
     },
 
+    /** Only teachers have a code; do not default to null (unique index would reject multiple nulls). */
     teacherCode: {
       type: String,
-      default: null,
-      sparse: true,
-      unique: true,
-      index: true,
+      trim: true,
     },
 
     token_version: { type: Number, default: 0 },
@@ -71,5 +69,16 @@ UserSchema.pre('save', function (next) {
   this.set('updatedAt', new Date());
   next();
 });
+
+/** Unique only when set (teachers); avoids E11000 duplicate key { teacherCode: null }. */
+UserSchema.index(
+  { teacherCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      teacherCode: { $exists: true, $type: 'string', $gt: '' },
+    },
+  }
+);
 
 export const User = mongoose.model<IUser>('User', UserSchema);

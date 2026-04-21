@@ -15,7 +15,7 @@ export async function listUsers(req: AuthRequest, res: Response) {
 export async function createUser(req: AuthRequest, res: Response) {
   try {
     const out = await authService.createUserByAdmin(req.body);
-    const { user, welcomeToken } = out;
+    const { user, welcomeToken, welcomeEmailSent } = out;
     const studentId = 'studentId' in out ? out.studentId : undefined;
     const teacherCode = 'teacherCode' in out ? out.teacherCode : undefined;
     return created(res, {
@@ -25,6 +25,7 @@ export async function createUser(req: AuthRequest, res: Response) {
       welcomeToken,
       studentId,
       teacherCode,
+      welcomeEmailSent,
     });
   } catch (e) {
     return fail(res, 400, e instanceof Error ? e.message : 'Error');
@@ -53,8 +54,40 @@ export async function updateUser(req: AuthRequest, res: Response) {
 }
 
 export async function deleteUser(req: AuthRequest, res: Response) {
-  await authService.deleteUserCascade(req.params.id);
-  return ok(res, null, 'Deleted');
+  if (!req.authUser) return fail(res, 401, 'Unauthorized');
+  const roles = req.authUser.roles ?? [];
+  const targetId = req.params.id;
+
+  if (roles.includes('admin')) {
+    await authService.deleteUserCascade(targetId);
+    return ok(res, null, 'Deleted');
+  }
+
+  if (roles.includes('teacher')) {
+    const teacherDoc = await User.findById(req.authUser.id).lean();
+    if (!teacherDoc || teacherDoc.role !== 'teacher') {
+      return fail(res, 403, 'Forbidden');
+    }
+    const teacherClass = teacherDoc.assignedClass ?? '';
+    if (!String(teacherClass).trim()) {
+      return fail(res, 403, 'Set your assigned class in profile before removing students');
+    }
+
+    const target = await User.findById(targetId).lean();
+    if (!target) return fail(res, 404, 'Student not found');
+    if (target.role !== 'student') {
+      return fail(res, 403, 'You can only remove students');
+    }
+    const studentClass = (target.assignedClass ?? '') as string;
+    if (String(studentClass) !== String(teacherClass)) {
+      return fail(res, 403, 'This student is not in your class');
+    }
+
+    await authService.deleteUserCascade(targetId);
+    return ok(res, null, 'Deleted');
+  }
+
+  return fail(res, 403, 'Forbidden');
 }
 
 export async function assignRole(req: AuthRequest, res: Response) {

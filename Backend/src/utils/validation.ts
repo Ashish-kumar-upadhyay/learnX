@@ -67,4 +67,11 @@ export const paginationSchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
 });
 
+/** Public contact form (Resend → admin inbox). */
+export const contactFormSchema = Joi.object({
+  name: Joi.string().min(1).max(200).required(),
+  email: Joi.string().email().required(),
+  message: Joi.string().min(10).max(10000).required(),
+});
+
 export { objectId };
